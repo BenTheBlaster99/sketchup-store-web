@@ -5,20 +5,20 @@ import { PLUGIN_DOWNLOAD_URL, PLUGIN_VERSION } from '@/lib/plugin'
 
 const steps = [
   {
-    title: 'Download & unzip',
-    body: 'Download the plugin below and extract the .zip file.',
+    title: 'Download the plugin',
+    body: 'Click the button below to download the .rbz file (one file, no zip to extract).',
   },
   {
-    title: 'Open the SketchUp Plugins folder',
-    body: 'In SketchUp: Window → Preferences → Extensions → Install Extension is NOT used here. Instead copy the files into your Plugins folder (path below).',
+    title: 'Install in SketchUp',
+    body: 'Window → Preferences → Extensions → Install Extension… → choose the .rbz file.',
   },
   {
-    title: 'Copy the files',
-    body: 'Put load_sketchlib.rb and the sketchlib-plugin folder into the Plugins folder.',
+    title: 'Allow unsigned extensions',
+    body: 'If prompted, approve the install or set Extension Manager loading to Unrestricted.',
   },
   {
-    title: 'Restart & open',
-    body: 'Restart SketchUp, start a new model, then open Extensions → SketchLib and sign in with this account.',
+    title: 'Open SketchLib',
+    body: 'Start a model → Extensions → SketchLib → sign in with this account.',
   },
 ]
 
@@ -56,13 +56,13 @@ export default function PluginPage() {
             href={PLUGIN_DOWNLOAD_URL}
             className="bg-zinc-900 text-white px-5 py-3 rounded-xl hover:bg-zinc-800 transition font-medium"
           >
-            Download plugin (.zip)
+            Download plugin (.rbz)
           </a>
         </div>
       </div>
 
       <div className="mt-8">
-        <h2 className="text-lg font-semibold text-zinc-900 mb-4">Install in 4 steps</h2>
+        <h2 className="text-lg font-semibold text-zinc-900 mb-4">Install in 4 steps (one-click)</h2>
         <ol className="space-y-4">
           {steps.map((step, i) => (
             <li key={step.title} className="flex gap-4">
@@ -78,18 +78,9 @@ export default function PluginPage() {
         </ol>
       </div>
 
-      <div className="mt-8 rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
-        <p className="font-medium text-zinc-900 mb-1">Plugins folder location</p>
-        <p className="font-mono text-xs break-all">
-          Windows: %APPDATA%\SketchUp\SketchUp 2026\SketchUp\Plugins\
-        </p>
-        <p className="font-mono text-xs break-all mt-1">
-          macOS: ~/Library/Application Support/SketchUp 2026/SketchUp/Plugins/
-        </p>
-        <p className="mt-2 text-zinc-500">
-          One computer per account. Sign in with the same email and password you use here.
-        </p>
-      </div>
+      <p className="mt-8 text-sm text-zinc-500">
+        One computer per account. Sign in with the same email and password you use here.
+      </p>
     </div>
   )
 }
