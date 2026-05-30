@@ -49,7 +49,7 @@ export default function PluginPage() {
           <div>
             <p className="font-medium text-zinc-900">SketchLib Plugin</p>
             <p className="text-sm text-zinc-500">
-              {PLUGIN_VERSION} · Windows &amp; macOS · SketchUp 2024+
+              {PLUGIN_VERSION} · Windows &amp; macOS · SketchUp 2020–2026
             </p>
           </div>
           <a
