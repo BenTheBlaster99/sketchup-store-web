@@ -1,7 +1,16 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  images: {
+    // Presigned R2 thumbnail URLs — use unoptimized on <Image> (URLs expire).
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**.r2.cloudflarestorage.com',
+        pathname: '/**',
+      },
+    ],
+  },
+}
 
-export default nextConfig;
+export default nextConfig
