@@ -56,6 +56,21 @@ export default function DashboardPage() {
 
       <AccountStatusBanner />
 
+      <Link
+        href="/dashboard/plugin"
+        className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 hover:border-zinc-300 transition"
+      >
+        <div>
+          <p className="text-sm font-medium text-zinc-900">Get the SketchUp plugin</p>
+          <p className="text-sm text-zinc-500">
+            Insert models directly inside SketchUp. Download &amp; install guide →
+          </p>
+        </div>
+        <span className="text-sm bg-zinc-900 text-white px-4 py-2 rounded-lg shrink-0">
+          Download
+        </span>
+      </Link>
+
       {error && (
         <p className="text-red-600 bg-red-50 rounded-lg px-4 py-3 mb-6">
           Could not load categories. Is the API running?
