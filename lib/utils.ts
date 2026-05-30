@@ -2,6 +2,19 @@ export function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ')
 }
 
+/** Filament admin URL — derived from NEXT_PUBLIC_API_URL unless NEXT_PUBLIC_ADMIN_URL is set. */
+export function getAdminPanelUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_ADMIN_URL
+  if (explicit) return explicit
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL
+  if (apiUrl) {
+    return `${apiUrl.replace(/\/api\/?$/, '')}/admin`
+  }
+
+  return 'http://localhost:8000/admin'
+}
+
 export function formatDzd(amount: number): string {
   return `${amount.toLocaleString()} DZD`
 }

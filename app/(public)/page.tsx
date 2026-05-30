@@ -1,6 +1,8 @@
 import Link from 'next/link'
+import { getAdminPanelUrl } from '@/lib/utils'
 
 export default function HomePage() {
+  const adminUrl = getAdminPanelUrl()
   return (
     <main className="max-w-5xl mx-auto px-4 py-16 sm:py-24">
       <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-zinc-900 mb-4">
@@ -51,7 +53,7 @@ export default function HomePage() {
       <p className="text-xs text-zinc-400">
         Staff admin panel:{' '}
         <a
-          href="http://localhost:8000/admin"
+          href={adminUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="text-zinc-600 underline hover:text-zinc-900"
