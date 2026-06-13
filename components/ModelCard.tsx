@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import axios from 'axios'
-import { libraryApi } from '@/lib/api'
+import { favoritesApi, libraryApi } from '@/lib/api'
 import type { Model3D } from '@/lib/types'
 import { formatFileSize, triggerFileDownload } from '@/lib/utils'
 
@@ -14,6 +14,9 @@ interface ModelCardProps {
 export function ModelCard({ model }: ModelCardProps) {
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [favorited, setFavorited] = useState(model.is_favorited ?? false)
+  const [likes, setLikes] = useState(model.likes_count ?? 0)
+  const [toggling, setToggling] = useState(false)
 
   const handleDownload = async () => {
     setDownloading(true)
@@ -28,6 +31,21 @@ export function ModelCard({ model }: ModelCardProps) {
       setError(message)
     } finally {
       setDownloading(false)
+    }
+  }
+
+  const handleFavorite = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (toggling) return
+    setToggling(true)
+    try {
+      const res = await favoritesApi.toggle(model.id)
+      setFavorited(res.data.favorited)
+      setLikes(res.data.likes_count)
+    } catch {
+      // 401 handled by api interceptor
+    } finally {
+      setToggling(false)
     }
   }
 
@@ -57,13 +75,40 @@ export function ModelCard({ model }: ModelCardProps) {
           SketchUp {model.sketchup_version_min}+ · {formatFileSize(model.file_size_bytes)}
         </p>
 
-        {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+        {model.tags && model.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5 mb-1">
+            {model.tags.map((tag) => (
+              <span key={tag.id} className="text-xs text-zinc-400">
+                #{tag.name}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mt-2 mb-2">
+          <span className="text-xs text-zinc-400">
+            {likes} {likes === 1 ? 'like' : 'likes'}
+          </span>
+          <button
+            type="button"
+            onClick={handleFavorite}
+            disabled={toggling}
+            aria-label={favorited ? 'Remove from saved' : 'Save and like'}
+            className={`text-lg leading-none transition disabled:opacity-50 ${
+              favorited ? 'text-red-500' : 'text-zinc-300 hover:text-red-400'
+            }`}
+          >
+            {favorited ? '♥' : '♡'}
+          </button>
+        </div>
+
+        {error && <p className="text-xs text-red-600 mb-1">{error}</p>}
 
         <button
           type="button"
           onClick={handleDownload}
           disabled={downloading}
-          className="mt-2 w-full text-xs bg-zinc-900 text-white py-1.5 rounded-lg hover:bg-zinc-800 disabled:opacity-50 transition"
+          className="w-full text-xs bg-zinc-900 text-white py-1.5 rounded-lg hover:bg-zinc-800 disabled:opacity-50 transition"
         >
           {downloading ? 'Preparing…' : 'Download .skp'}
         </button>

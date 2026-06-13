@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getAdminPanelUrl } from '@/lib/utils'
+import { WaitlistForm } from '@/components/WaitlistForm'
 
 export default function HomePage() {
   const adminUrl = getAdminPanelUrl()
@@ -50,7 +51,9 @@ export default function HomePage() {
         ))}
       </section>
 
-      <p className="text-xs text-zinc-400">
+      <WaitlistForm />
+
+      <p className="text-xs text-zinc-400 px-4 pb-16">
         Staff admin panel:{' '}
         <a
           href={adminUrl}

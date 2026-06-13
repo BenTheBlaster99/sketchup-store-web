@@ -1,0 +1,922 @@
+my updated chat with claude : 
+me :" we have alot of updates to do (or maybe additional features) 
+front web page : sarah is cooking the front so we dont have to think about that 
+plugin: drag and drop the skp file in where ever we want in the sketchup 
+backend :
+
+adding favorite and save and like for the file
+
+somehow create a space for hashtag when a new sketchup file is added. the one who adds it add filter or hashtag system for like minimalism . in another word the file is categorized
+
+sarah want to create a pre-launch. (a waitlist) and people get notified when its launched"
+
+claude :" Good list. Let me go through each one honestly.
+
+Quick take on each
+Plugin drag and drop placement — worth doing and very doable in Ruby. The way it actually works in SketchUp isn't HTML drag-and-drop (the HtmlDialog can't do that natively). What it IS is a placement tool — user clicks Insert, SketchUp activates a custom tool where the model follows their cursor as a ghost/preview, they click anywhere in the 3D scene to drop it. This is exactly how SketchUp's own Components browser works. Clean UX, not complicated to build.
+Favorites + Likes — two different things worth keeping separate. Favorites = user's personal saved list (private). Likes = public count Sarah can see to know which models are popular. Both are easy — one migration each, two endpoints each, a heart icon on the model card. Maybe 2-3 hours total.
+Tags/Hashtags — this is the most valuable feature long-term for discoverability. As Sarah's library grows to 200+ models, users need to filter by style (minimalist, industrial, Scandinavian, etc.) not just category. Proper implementation: tags table + pivot table, multiselect in Filament when Sarah uploads, filter chips above the model grid on the frontend. Medium effort, high value.
+Pre-launch waitlist — easiest thing on the list. One table, one public endpoint, a form on the landing page, a Filament view so Sarah sees the count. When she's ready to launch, one email blast via Resend to everyone on it. Could build this in an hour.
+
+Suggested order
+1. Waitlist       — do this first, it's pre-launch, time-sensitive
+2. Tags           — before Sarah uploads real models (tag them at upload time, not retroactively)
+3. Favorites/Likes — user engagement, can come right after
+4. Plugin drag+drop — polish, do after the web features are solid
+
+One question before diving in
+For favorites vs likes — do you want both as separate interactions (heart to save privately + like to publicly react), or just one button that does both? Keeps the UI cleaner if it's one action.
+And for the waitlist — is this for the current site (people waiting for real models to be uploaded before they subscribe), or is the site already "live" and this is a separate pre-launch page Sarah is planning?
+Answer those two and we start with the waitlist."
+
+
+me :" 1. one button that does both
+2.we go for the first one. its for the current site (people wwaiting for real models to be uploaded before they sub)"
+
+
+claude :" Perfect. Let me give you everything for all four features in one shot, same format as before. Start implementing in order.
+
+FEATURE 1 — WAITLIST
+Backend
+bashphp artisan make:migration create_waitlist_entries_table
+php artisan make:model WaitlistEntry
+php artisan make:controller WaitlistController
+php artisan make:mail WaitlistLaunchNotification
+Migration
+phppublic function up(): void
+{
+    Schema::create('waitlist_entries', function (Blueprint $table) {
+        $table->id();
+        $table->string('email')->unique();
+        $table->string('name')->nullable();
+        $table->timestamp('notified_at')->nullable(); // set when launch email sent
+        $table->timestamps();
+    });
+}
+app/Models/WaitlistEntry.php
+php<?php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class WaitlistEntry extends Model
+{
+    protected $fillable = ['email', 'name', 'notified_at'];
+    protected $casts = ['notified_at' => 'datetime'];
+}
+app/Http/Controllers/WaitlistController.php
+php<?php
+namespace App\Http\Controllers;
+
+use App\Models\WaitlistEntry;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class WaitlistController extends Controller
+{
+    public function store(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'email' => 'required|email|max:255',
+            'name'  => 'nullable|string|max:100',
+        ]);
+
+        $entry = WaitlistEntry::firstOrCreate(
+            ['email' => $data['email']],
+            ['name'  => $data['name'] ?? null]
+        );
+
+        $alreadyJoined = !$entry->wasRecentlyCreated;
+
+        return response()->json([
+            'message'        => $alreadyJoined
+                ? 'You are already on the waitlist.'
+                : 'You have been added to the waitlist!',
+            'already_joined' => $alreadyJoined,
+        ], $alreadyJoined ? 200 : 201);
+    }
+
+    // Admin only — blast launch email to all un-notified entries
+    public function notifyAll(): JsonResponse
+    {
+        $entries = WaitlistEntry::whereNull('notified_at')->get();
+
+        foreach ($entries as $entry) {
+            \Mail::to($entry->email)
+                ->queue(new \App\Mail\WaitlistLaunchNotification($entry));
+
+            $entry->update(['notified_at' => now()]);
+        }
+
+        return response()->json([
+            'message' => 'Launch email sent to ' . $entries->count() . ' people.',
+        ]);
+    }
+}
+app/Mail/WaitlistLaunchNotification.php
+php<?php
+namespace App\Mail;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Mail\Mailable;
+use Illuminate\Queue\SerializesModels;
+
+class WaitlistLaunchNotification extends Mailable
+{
+    use Queueable, SerializesModels;
+
+    public function __construct(public $entry) {}
+
+    public function build()
+    {
+        return $this->subject('SketchLib is live — your models are ready 🎉')
+                    ->markdown('emails.waitlist-launch');
+    }
+}
+resources/views/emails/waitlist-launch.blade.php
+blade@component('mail::message')
+# Hey {{ $entry->name ?? 'there' }}, SketchLib is live!
+
+The library is now open. Browse and download curated 3D furniture
+models directly inside SketchUp — or from the web.
+
+@component('mail::button', ['url' => config('app.frontend_url') . '/pricing'])
+Browse the library
+@endcomponent
+
+Thanks for waiting,
+The SketchLib team
+@endcomponent
+Filament Resource
+bashphp artisan make:filament-resource WaitlistEntry --generate
+app/Filament/Resources/WaitlistEntryResource.php — replace the default:
+php<?php
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\WaitlistEntryResource\Pages;
+use App\Models\WaitlistEntry;
+use Filament\Forms\Form;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+
+class WaitlistEntryResource extends Resource
+{
+    protected static ?string $model = WaitlistEntry::class;
+    protected static ?string $navigationIcon = 'heroicon-o-envelope';
+    protected static ?string $navigationGroup = 'Marketing';
+    protected static ?string $navigationLabel = 'Waitlist';
+
+    public static function getNavigationBadge(): ?string
+    {
+        return static::getModel()::whereNull('notified_at')->count() ?: null;
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                Tables\Columns\TextColumn::make('name')->searchable(),
+                Tables\Columns\TextColumn::make('email')->searchable()->copyable(),
+                Tables\Columns\TextColumn::make('created_at')->dateTime()->sortable(),
+                Tables\Columns\IconColumn::make('notified_at')
+                    ->label('Notified')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-check-circle')
+                    ->falseIcon('heroicon-o-clock'),
+            ])
+            ->headerActions([
+                Tables\Actions\Action::make('notifyAll')
+                    ->label('Send launch email to all')
+                    ->icon('heroicon-o-paper-airplane')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->action(fn() => app(\App\Http\Controllers\WaitlistController::class)->notifyAll()),
+            ])
+            ->defaultSort('created_at', 'desc');
+    }
+
+    public static function form(Form $form): Form
+    {
+        return $form->schema([]);
+    }
+
+    public static function getPages(): array
+    {
+        return ['index' => Pages\ListWaitlistEntries::route('/')];
+    }
+}
+Routes — add to routes/api.php
+php// Public
+Route::post('waitlist', [WaitlistController::class, 'store']);
+
+// Admin only
+Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+    // ... existing routes
+    Route::post('waitlist/notify', [WaitlistController::class, 'notifyAll']);
+});
+Frontend — waitlist section in app/(public)/page.tsx
+Add this section below your hero:
+tsx// components/WaitlistForm.tsx
+'use client'
+import { useState } from 'react'
+import api from '@/lib/api'
+
+export default function WaitlistForm() {
+  const [email, setEmail]   = useState('')
+  const [name, setName]     = useState('')
+  const [state, setState]   = useState<'idle' | 'loading' | 'done' | 'exists'>('idle')
+
+  const handleSubmit = async () => {
+    if (!email) return
+    setState('loading')
+    try {
+      const res = await api.post('/waitlist', { email, name })
+      setState(res.data.already_joined ? 'exists' : 'done')
+    } catch {
+      setState('idle')
+    }
+  }
+
+  if (state === 'done') return (
+    <div className="text-center py-12">
+      <p className="text-2xl font-semibold mb-2">You&apos;re on the list ✓</p>
+      <p className="text-gray-500">We&apos;ll email you the moment the library is open.</p>
+    </div>
+  )
+
+  if (state === 'exists') return (
+    <div className="text-center py-12">
+      <p className="text-gray-500">You&apos;re already on the waitlist. We&apos;ll be in touch soon.</p>
+    </div>
+  )
+
+  return (
+    <section className="py-20 bg-gray-50">
+      <div className="max-w-xl mx-auto px-4 text-center">
+        <h2 className="text-3xl font-semibold mb-3">Get early access</h2>
+        <p className="text-gray-500 mb-8">
+          The library is coming soon. Join the waitlist and be the first
+          to know when models are ready.
+        </p>
+
+        <div className="flex flex-col gap-3">
+          <input
+            type="text"
+            placeholder="Your name (optional)"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="w-full border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+          />
+          <div className="flex gap-2">
+            <input
+              type="email"
+              placeholder="Your email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+              className="flex-1 border rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+            />
+            <button
+              onClick={handleSubmit}
+              disabled={state === 'loading' || !email}
+              className="bg-black text-white px-6 py-3 rounded-xl text-sm font-medium disabled:opacity-50 whitespace-nowrap"
+            >
+              {state === 'loading' ? 'Joining...' : 'Join waitlist'}
+            </button>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-400 mt-3">No spam. One email when we launch.</p>
+      </div>
+    </section>
+  )
+}
+
+FEATURE 2 — FAVORITES / LIKES (one button, both)
+Backend
+bashphp artisan make:migration create_model_favorites_table
+php artisan make:migration add_likes_count_to_sketchup_models_table
+Migration 1 — favorites table
+phppublic function up(): void
+{
+    Schema::create('model_favorites', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+        $table->foreignId('sketchup_model_id')
+              ->constrained('sketchup_models')->cascadeOnDelete();
+        $table->timestamps();
+        $table->unique(['user_id', 'sketchup_model_id']);
+    });
+}
+Migration 2 — likes count column
+phppublic function up(): void
+{
+    Schema::table('sketchup_models', function (Blueprint $table) {
+        $table->unsignedInteger('likes_count')->default(0)->after('sort_order');
+    });
+}
+Update app/Models/User.php — add relationship:
+phppublic function favorites(): HasMany
+{
+    return $this->hasMany(\App\Models\ModelFavorite::class);
+}
+
+public function hasFavorited(int $modelId): bool
+{
+    return $this->favorites()->where('sketchup_model_id', $modelId)->exists();
+}
+Update app/Models/SketchupModel.php — add relationship:
+phppublic function favorites(): HasMany
+{
+    return $this->hasMany(\App\Models\ModelFavorite::class);
+}
+app/Models/ModelFavorite.php
+php<?php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class ModelFavorite extends Model
+{
+    protected $fillable = ['user_id', 'sketchup_model_id'];
+
+    public function user(): BelongsTo    { return $this->belongsTo(User::class); }
+    public function model(): BelongsTo   { return $this->belongsTo(SketchupModel::class); }
+}
+app/Http/Controllers/Client/FavoriteController.php
+php<?php
+namespace App\Http\Controllers\Client;
+
+use App\Http\Controllers\Controller;
+use App\Models\ModelFavorite;
+use App\Models\SketchupModel;
+use App\Services\StorageService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class FavoriteController extends Controller
+{
+    public function __construct(private StorageService $storage) {}
+
+    // Toggle favorite + like
+    public function toggle(Request $request, int $modelId): JsonResponse
+    {
+        $user  = $request->user();
+        $model = SketchupModel::findOrFail($modelId);
+
+        $existing = ModelFavorite::where('user_id', $user->id)
+            ->where('sketchup_model_id', $modelId)
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+            $model->decrement('likes_count');
+            $favorited = false;
+        } else {
+            ModelFavorite::create([
+                'user_id'           => $user->id,
+                'sketchup_model_id' => $modelId,
+            ]);
+            $model->increment('likes_count');
+            $favorited = true;
+        }
+
+        return response()->json([
+            'favorited'   => $favorited,
+            'likes_count' => $model->fresh()->likes_count,
+        ]);
+    }
+
+    // Get user's saved models
+    public function index(Request $request): JsonResponse
+    {
+        $models = SketchupModel::whereHas('favorites', function ($q) use ($request) {
+                $q->where('user_id', $request->user()->id);
+            })
+            ->where('is_published', true)
+            ->get()
+            ->map(function ($model) {
+                $model->thumbnail_url = $this->storage->presignedThumbnailUrl($model->thumbnail_key);
+                $model->is_favorited  = true;
+                return $model;
+            });
+
+        return response()->json($models);
+    }
+}
+Add to routes/api.php inside auth middleware group:
+phpRoute::post('models/{modelId}/favorite', [FavoriteController::class, 'toggle']);
+Route::get('models/favorites',           [FavoriteController::class, 'index']);
+Update LibraryController::categoryModels() — attach favorited state to each model:
+php// Inside the ->map() that already generates thumbnail_url, add:
+$model->is_favorited  = $user->hasFavorited($model->id);
+Filament — add likes column to ModelAdminResource table:
+phpTables\Columns\TextColumn::make('likes_count')
+    ->label('Likes')
+    ->sortable()
+    ->alignCenter(),
+Frontend — update ModelCard.tsx
+Add to your Model3D type in lib/types.ts:
+typescriptlikes_count:  number
+is_favorited: boolean
+Update ModelCard to include the heart toggle:
+tsx// Inside ModelCard component, add state:
+const [favorited, setFavorited] = useState(model.is_favorited)
+const [likes, setLikes]         = useState(model.likes_count)
+const [toggling, setToggling]   = useState(false)
+
+const handleFavorite = async (e: React.MouseEvent) => {
+  e.stopPropagation()
+  if (toggling) return
+  setToggling(true)
+  try {
+    const res = await api.post(`/models/${model.id}/favorite`)
+    setFavorited(res.data.favorited)
+    setLikes(res.data.likes_count)
+  } finally {
+    setToggling(false)
+  }
+}
+
+// In the JSX, add above the download button:
+<div className="flex items-center justify-between mb-2">
+  <span className="text-xs text-gray-400">{likes} {likes === 1 ? 'like' : 'likes'}</span>
+  <button
+    onClick={handleFavorite}
+    disabled={toggling}
+    className={`text-lg transition ${favorited ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
+  >
+    {favorited ? '♥' : '♡'}
+  </button>
+</div>
+New page app/(dashboard)/dashboard/saved/page.tsx
+tsx'use client'
+import { useEffect, useState } from 'react'
+import api from '@/lib/api'
+import { Model3D } from '@/lib/types'
+import ModelCard from '@/components/ModelCard'
+
+export default function SavedModelsPage() {
+  const [models, setModels] = useState<Model3D[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.get('/models/favorites')
+      .then(res => setModels(res.data))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <div className="p-8 text-gray-400">Loading...</div>
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-10">
+      <h1 className="text-2xl font-semibold mb-8">Saved models</h1>
+      {models.length === 0 ? (
+        <p className="text-gray-400">No saved models yet. Hit ♡ on any model to save it.</p>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {models.map(m => <ModelCard key={m.id} model={m} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+Add "Saved" link to your dashboard navbar.
+
+FEATURE 3 — TAGS / HASHTAGS
+Backend
+bashphp artisan make:migration create_tags_table
+php artisan make:migration create_sketchup_model_tag_table
+php artisan make:model Tag
+Migration 1 — tags
+phppublic function up(): void
+{
+    Schema::create('tags', function (Blueprint $table) {
+        $table->id();
+        $table->string('name')->unique();
+        $table->string('slug')->unique();
+        $table->timestamps();
+    });
+}
+Migration 2 — pivot
+phppublic function up(): void
+{
+    Schema::create('sketchup_model_tag', function (Blueprint $table) {
+        $table->foreignId('sketchup_model_id')
+              ->constrained('sketchup_models')->cascadeOnDelete();
+        $table->foreignId('tag_id')->constrained()->cascadeOnDelete();
+        $table->primary(['sketchup_model_id', 'tag_id']);
+    });
+}
+app/Models/Tag.php
+php<?php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+
+class Tag extends Model
+{
+    protected $fillable = ['name', 'slug'];
+
+    public function models(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            SketchupModel::class,
+            'sketchup_model_tag'
+        );
+    }
+}
+Update app/Models/SketchupModel.php — add tags relationship:
+phppublic function tags(): BelongsToMany
+{
+    return $this->belongsToMany(Tag::class, 'sketchup_model_tag');
+}
+Update LibraryController::categoryModels() — load tags + add filter:
+phppublic function categoryModels(Request $request, string $slug): JsonResponse
+{
+    // ... existing access check ...
+
+    $query = SketchupModel::where('category_id', $category->id)
+        ->where('is_published', true)
+        ->with('tags');
+
+    // Tag filter
+    if ($request->has('tags')) {
+        $tagSlugs = (array) $request->tags;
+        $query->whereHas('tags', function ($q) use ($tagSlugs) {
+            $q->whereIn('slug', $tagSlugs);
+        });
+    }
+
+    $models = $query->orderBy('sort_order')->get()->map(function ($model) use ($user) {
+        $model->thumbnail_url = $this->storage->presignedThumbnailUrl($model->thumbnail_key);
+        $model->is_favorited  = $user->hasFavorited($model->id);
+        return $model;
+    });
+
+    return response()->json([
+        'category' => $category,
+        'models'   => $models,
+    ]);
+}
+Add public tags endpoint to routes/api.php
+phpRoute::get('tags', fn() => \App\Models\Tag::orderBy('name')->get());
+Filament — TagResource
+bashphp artisan make:filament-resource Tag --generate
+Simple resource — just name + slug, auto-generate slug from name. Add to TagResource:
+phpForms\Components\TextInput::make('name')
+    ->required()
+    ->live(onBlur: true)
+    ->afterStateUpdated(fn ($state, $set) =>
+        $set('slug', \Illuminate\Support\Str::slug($state))
+    ),
+Forms\Components\TextInput::make('slug')->required()->unique(ignoreRecord: true),
+Update ModelAdminResource — add tags field to the upload form:
+phpForms\Components\Select::make('tags')
+    ->relationship('tags', 'name')
+    ->multiple()
+    ->preload()
+    ->searchable()
+    ->createOptionForm([
+        Forms\Components\TextInput::make('name')->required()->live(onBlur: true)
+            ->afterStateUpdated(fn ($state, $set) =>
+                $set('slug', \Illuminate\Support\Str::slug($state))
+            ),
+        Forms\Components\TextInput::make('slug')->required(),
+    ]),
+And show tags in the models table:
+phpTables\Columns\TextColumn::make('tags.name')
+    ->badge()
+    ->separator(','),
+Frontend — update app/(dashboard)/dashboard/[categorySlug]/page.tsx
+Add tag filter above the model grid:
+tsxconst [tags, setTags]               = useState<Tag[]>([])
+const [activeTags, setActiveTags]   = useState<string[]>([])
+
+// Fetch tags on mount
+useEffect(() => {
+  api.get('/tags').then(res => setTags(res.data))
+}, [])
+
+// Re-fetch models when activeTags changes
+useEffect(() => {
+  if (!categorySlug) return
+  setLoading(true)
+  const params = activeTags.length ? { tags: activeTags } : {}
+  api.get(`/categories/${categorySlug}/models`, { params })
+    .then(res => { setCategory(res.data.category); setModels(res.data.models) })
+    .finally(() => setLoading(false))
+}, [categorySlug, activeTags])
+
+const toggleTag = (slug: string) => {
+  setActiveTags(prev =>
+    prev.includes(slug) ? prev.filter(t => t !== slug) : [...prev, slug]
+  )
+}
+
+// In JSX, above the model grid:
+{tags.length > 0 && (
+  <div className="flex flex-wrap gap-2 mb-6">
+    {tags.map(tag => (
+      <button
+        key={tag.id}
+        onClick={() => toggleTag(tag.slug)}
+        className={`px-3 py-1 rounded-full text-sm border transition ${
+          activeTags.includes(tag.slug)
+            ? 'bg-black text-white border-black'
+            : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+        }`}
+      >
+        #{tag.name}
+      </button>
+    ))}
+    {activeTags.length > 0 && (
+      <button onClick={() => setActiveTags([])}
+        className="px-3 py-1 text-sm text-gray-400 hover:text-black">
+        Clear
+      </button>
+    )}
+  </div>
+)}
+Add Tag interface to lib/types.ts:
+typescriptexport interface Tag {
+  id: number
+  name: string
+  slug: string
+}
+And add tags to Model3D:
+typescripttags: Tag[]
+Show tags on ModelCard.tsx below the model name:
+tsx{model.tags?.length > 0 && (
+  <div className="flex flex-wrap gap-1 mt-1 mb-2">
+    {model.tags.map(tag => (
+      <span key={tag.id} className="text-xs text-gray-400">#{tag.name}</span>
+    ))}
+  </div>
+)}
+
+FEATURE 4 — PLUGIN DRAG AND DROP PLACEMENT
+This replaces the current insert at origin behavior with a proper placement tool — model follows the cursor as a ghost until user clicks to drop it.
+Update sketchlib/bridge.rb — replace download_and_insert with a two-step approach:
+ruby# Step 1: Download and prepare the definition (no insert yet)
+def self.download_and_prepare(dialog, signed_url, model_name)
+  uri = URI.parse(signed_url)
+  tmp = Tempfile.new(['sketchlib_', '.skp'])
+  tmp.binmode
+
+  Net::HTTP.start(uri.host, uri.port, use_ssl: true) do |http|
+    http.request(Net::HTTP::Get.new(uri.request_uri)) do |res|
+      res.read_body { |chunk| tmp.write(chunk) }
+    end
+  end
+  tmp.close
+
+  model      = Sketchup.active_model
+  definition = model.definitions.load(tmp.path)
+  tmp.unlink
+
+  # Activate the placement tool — user clicks to place
+  model.select_tool(PlacementTool.new(definition, model_name, dialog))
+  dialog.execute_script("window.onPlacementMode()")
+
+rescue => e
+  dialog.execute_script("window.onInsertError('#{e.message.gsub("'", "\\'")}')")
+end
+
+
+# Placement tool — model follows cursor, click to drop
+class PlacementTool
+  def initialize(definition, model_name, dialog)
+    @definition = definition
+    @model_name = model_name
+    @dialog     = dialog
+    @ip         = Sketchup::InputPoint.new
+    @placed     = false
+  end
+
+  def activate
+    update_status_bar
+    Sketchup.active_model.active_view.invalidate
+  end
+
+  def resume(view)
+    update_status_bar
+    view.invalidate
+  end
+
+  def deactivate(view)
+    view.invalidate
+  end
+
+  def onMouseMove(_flags, x, y, view)
+    @ip.pick(view, x, y)
+    view.invalidate
+  end
+
+  def draw(view)
+    return unless @ip.valid?
+
+    # Draw a point marker at cursor position as placement indicator
+    view.draw_points([@ip.position], 12, 4, Sketchup::Color.new(0, 120, 255))
+
+    # Draw bounding box preview of the component
+    bounds = @definition.bounds
+    transform = Geom::Transformation.new(@ip.position)
+    corners = (0..7).map { |i| transform * bounds.corner(i) }
+    view.drawing_color = Sketchup::Color.new(0, 120, 255, 128)
+    view.line_width    = 1
+    # Draw box edges
+    [[0,1],[1,3],[3,2],[2,0],[4,5],[5,7],[7,6],[6,4],[0,4],[1,5],[2,6],[3,7]].each do |a, b|
+      view.draw(GL_LINES, corners[a], corners[b])
+    end
+  end
+
+  def onLButtonDown(_flags, x, y, view)
+    @ip.pick(view, x, y)
+    return unless @ip.valid?
+
+    model     = Sketchup.active_model
+    transform = Geom::Transformation.new(@ip.position)
+
+    model.start_operation("Insert #{@model_name}", true)
+    model.active_entities.add_instance(@definition, transform)
+    model.commit_operation
+
+    @placed = true
+    Sketchup.active_model.select_tool(nil)
+    @dialog.execute_script("window.onModelInserted('#{@model_name}')")
+  end
+
+  def onCancel(_reason, _view)
+    Sketchup.active_model.select_tool(nil) unless @placed
+    @dialog.execute_script("window.onInsertCancelled()")
+  end
+
+  def getInstructorContentDirectory; end
+
+  private
+
+  def update_status_bar
+    Sketchup.set_status_text(
+      "Click to place #{@model_name}   |   Esc to cancel",
+      SB_PROMPT
+    )
+  end
+end
+Update sketchlib/main.rb — change the insertModel callback to call download_and_prepare:
+ruby@dialog.add_action_callback('insertModel') do |_ctx, signed_url, model_name|
+  Bridge.download_and_prepare(@dialog, signed_url, model_name)
+end
+Update ui/src/components/ModelCard.jsx — handle the new placement mode state:
+jsxconst [state, setState] = useState('idle')
+// idle | loading | placing | inserted | error
+
+// In the component, hook into window callbacks:
+useEffect(() => {
+  window.onPlacementMode   = () => setState('placing')
+  window.onModelInserted   = () => { setState('inserted'); setTimeout(() => setState('idle'), 2000) }
+  window.onInsertCancelled = () => setState('idle')
+  window.onInsertError     = () => setState('error')
+}, [])
+
+const handleInsert = async () => {
+  setState('loading')
+  try {
+    const res = await api.downloadModel(model.id)
+    window.sketchup.insertModel(res.download_url, model.name)
+    // state changes to 'placing' via window.onPlacementMode callback
+  } catch {
+    setState('error')
+    setTimeout(() => setState('idle'), 3000)
+  }
+}
+
+// Button label by state:
+const buttonLabel = {
+  idle:     'Insert model',
+  loading:  'Downloading...',
+  placing:  '📍 Click in scene to place',
+  inserted: '✓ Placed!',
+  error:    'Error — retry',
+}[state]
+
+const buttonStyle = {
+  ...styles.btn,
+  ...(state === 'placing'  ? { background: '#2563eb' } : {}),
+  ...(state === 'inserted' ? { background: '#16a34a' } : {}),
+  ...(state === 'error'    ? { background: '#dc2626' } : {}),
+}
+After all changes: npm run build in sketchlib-plugin/ui/ and rebuild with production URL.
+
+Migration + seeding
+bashphp artisan migrate
+php artisan db:seed --class=TagSeeder  # optional — create a TagSeeder with starter tags
+Starter tags worth seeding for Sarah (adjust to her style):
+php// database/seeders/TagSeeder.php
+$tags = [
+  'Minimalist', 'Modern', 'Classic', 'Industrial',
+  'Scandinavian', 'Rustic', 'Contemporary', 'Luxury',
+  'Compact', 'Outdoor'
+];
+
+foreach ($tags as $name) {
+    Tag::firstOrCreate(
+        ['slug' => Str::slug($name)],
+        ['name' => $name]
+    );
+}
+bashphp artisan db:seed --class=TagSeeder
+
+Deploy order
+1. Push backend changes → Laravel Cloud auto-deploys
+2. php artisan migrate --force (run from Laravel Cloud shell or trigger via deploy command)
+3. Push frontend changes → Vercel auto-deploys
+4. Rebuild plugin: cd sketchlib-plugin/ui && npm run build → push dist/ → new GitHub release v1.1.0"
+
+
+UPDATES FROM THE BACKEND :" 
+Backend is live — migrate/seed ran clean. Frontend + plugin are next.
+
+Copy-paste for frontend + plugin windows
+Backend deployed (Laravel Cloud)
+New API endpoints:
+
+Method	Endpoint	Auth	Purpose
+POST
+/api/waitlist
+Public
+{ email, name? } → join waitlist
+GET
+/api/tags
+Public
+All tags { id, name, slug }
+POST
+/api/models/{id}/favorite
+User
+Toggle save + like → { favorited, likes_count }
+GET
+/api/models/favorites
+User
+User’s saved models list
+GET
+/api/categories/{slug}/models?tags=modern,compact
+User
+Filter by tag slug(s)
+Model JSON now includes:
+
+likes_count (int)
+is_favorited (bool, when logged in)
+tags (array of { id, name, slug })
+Waitlist responses:
+
+New: 201 + "You have been added to the waitlist!"
+Duplicate: 200 + already_joined: true
+Filament (Sarah): Marketing → Waitlist, Content → Tags, likes on 3D Models, tag multiselect on upload.
+
+Production API: https://sketchup-store-api-main-cupply.laravel.cloud/api
+Tags seeded: Minimalist, Modern, Classic, Industrial, Scandinavian, Rustic, Contemporary, Luxury, Compact, Outdoor
+
+Frontend — build this
+Waitlist — WaitlistForm on landing → POST /waitlist
+Tags — fetch GET /tags, filter chips on category page → ?tags=slug1,slug2
+Favorites — one ♥ button on ModelCard → POST /models/{id}/favorite; show likes_count
+Saved page — /dashboard/saved → GET /models/favorites
+Types — add Tag, likes_count, is_favorited, tags[] to Model3D
+Plugin — build this (backend unchanged)
+allow_newer: true on definitions.load (Sarah SU 2022 fix)
+Placement tool — click to place model (not insert at origin)
+Optional later: show tags on model cards; favorites N/A in plugin unless you add it
+Order: Frontend features 1–4 → plugin zip rebuild → full test on prod API."
+
+
+UPDATES FROM FRONTEND :
+"
+Frontend WORKUPDATE — done
+Feature	What was built
+Waitlist
+WaitlistForm on the landing page → POST /waitlist (handles new signup + “already joined”)
+Tags
+TagFilter chips on category pages → GET /tags + ?tags=slug1,slug2 on model fetch
+Favorites / likes
+Single ♥ on ModelCard → POST /models/{id}/favorite, shows likes_count, tag pills on cards
+Saved page
+/dashboard/saved → GET /models/favorites, Saved link in navbar
+Files touched
+New: components/WaitlistForm.tsx, components/TagFilter.tsx, app/(dashboard)/dashboard/saved/page.tsx
+Updated: landing page, category page, ModelCard, Navbar, lib/api.ts, lib/types.ts
+Lint passes. Local npm run build still hangs at “Running TypeScript” (same as before); Vercel builds have been fine.
+
+What to test on prod (after deploy)
+Landing — submit waitlist email (duplicate should show “already on the list”).
+Category page — tag chips filter models (e.g. #Modern, #Compact).
+Model card — ♥ toggles save/like; count updates.
+Saved — /dashboard/saved lists favorited models.
+Not in this repo (plugin — separate)
+allow_newer: true on definitions.load
+Placement tool (click-to-place in scene)
+Rebuild plugin zip for v1.1.0
+Changes are not committed yet. Say the word if you want me to commit and push so Vercel deploys, or if you want to tackle the plugin next."
+

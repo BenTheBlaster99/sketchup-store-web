@@ -5,10 +5,23 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import axios from 'axios'
 import { libraryApi } from '@/lib/api'
-import type { Category, Model3D } from '@/lib/types'
+import type { Category, Model3D, Tag } from '@/lib/types'
 import { ModelCard } from '@/components/ModelCard'
+import { TagFilter } from '@/components/TagFilter'
 
-function CategoryModelsContent({ categorySlug }: { categorySlug: string }) {
+function CategoryModelsContent({
+  categorySlug,
+  activeTags,
+  tags,
+  onToggleTag,
+  onClearTags,
+}: {
+  categorySlug: string
+  activeTags: string[]
+  tags: Tag[]
+  onToggleTag: (slug: string) => void
+  onClearTags: () => void
+}) {
   const [category, setCategory] = useState<Category | null>(null)
   const [models, setModels] = useState<Model3D[]>([])
   const [loading, setLoading] = useState(true)
@@ -19,7 +32,7 @@ function CategoryModelsContent({ categorySlug }: { categorySlug: string }) {
 
     void (async () => {
       try {
-        const res = await libraryApi.getCategoryModels(categorySlug)
+        const res = await libraryApi.getCategoryModels(categorySlug, activeTags)
         if (cancelled) return
         setCategory(res.data.category)
         setModels(res.data.models)
@@ -40,7 +53,7 @@ function CategoryModelsContent({ categorySlug }: { categorySlug: string }) {
     return () => {
       cancelled = true
     }
-  }, [categorySlug])
+  }, [categorySlug, activeTags])
 
   if (loading) {
     return <div className="p-8 text-zinc-500">Loading models…</div>
@@ -70,13 +83,23 @@ function CategoryModelsContent({ categorySlug }: { categorySlug: string }) {
       </Link>
 
       <h1 className="text-2xl font-semibold text-zinc-900 mb-2">{category?.name}</h1>
-      <p className="text-zinc-500 mb-8">
+      <p className="text-zinc-500 mb-4">
         {models.length} model{models.length === 1 ? '' : 's'}
+        {activeTags.length > 0 && ' matching filters'}
       </p>
+
+      <TagFilter
+        tags={tags}
+        activeSlugs={activeTags}
+        onToggle={onToggleTag}
+        onClear={onClearTags}
+      />
 
       {models.length === 0 ? (
         <p className="text-zinc-500 border border-dashed border-zinc-300 rounded-xl px-4 py-8 text-center bg-white">
-          No published models in this category yet.
+          {activeTags.length > 0
+            ? 'No models match these tags. Try clearing filters.'
+            : 'No published models in this category yet.'}
         </p>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -91,10 +114,39 @@ function CategoryModelsContent({ categorySlug }: { categorySlug: string }) {
 
 export default function CategoryModelsPage() {
   const { categorySlug } = useParams<{ categorySlug: string }>()
+  const [tags, setTags] = useState<Tag[]>([])
+  const [activeTags, setActiveTags] = useState<string[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+
+    void libraryApi.getTags().then((res) => {
+      if (!cancelled) setTags(res.data)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const toggleTag = (slug: string) => {
+    setActiveTags((prev) =>
+      prev.includes(slug) ? prev.filter((t) => t !== slug) : [...prev, slug],
+    )
+  }
 
   if (!categorySlug) {
     return null
   }
 
-  return <CategoryModelsContent key={categorySlug} categorySlug={categorySlug} />
+  return (
+    <CategoryModelsContent
+      key={`${categorySlug}-${activeTags.join(',')}`}
+      categorySlug={categorySlug}
+      activeTags={activeTags}
+      tags={tags}
+      onToggleTag={toggleTag}
+      onClearTags={() => setActiveTags([])}
+    />
+  )
 }

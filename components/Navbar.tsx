@@ -28,6 +28,9 @@ export function Navbar() {
               <Link href="/dashboard" className="text-zinc-700 hover:text-zinc-900">
                 Library
               </Link>
+              <Link href="/dashboard/saved" className="text-zinc-700 hover:text-zinc-900">
+                Saved
+              </Link>
               <Link
                 href="/dashboard/plugin"
                 className="text-zinc-700 hover:text-zinc-900"

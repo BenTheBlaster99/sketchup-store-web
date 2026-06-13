@@ -39,6 +39,12 @@ export interface Category {
   pack?: CategoryPack | null
 }
 
+export interface Tag {
+  id: number
+  name: string
+  slug: string
+}
+
 export interface Model3D {
   id: number
   category_id: number
@@ -48,6 +54,9 @@ export interface Model3D {
   file_size_bytes: number
   sketchup_version_min: number
   is_published: boolean
+  likes_count?: number
+  is_favorited?: boolean
+  tags?: Tag[]
 }
 
 export interface CategoryPack {

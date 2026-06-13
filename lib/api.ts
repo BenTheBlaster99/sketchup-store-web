@@ -53,13 +53,28 @@ export const libraryApi = {
 
   getPlans: () => api.get<import('@/lib/types').Plan[]>('/plans'),
 
-  getCategoryModels: (slug: string) =>
+  getTags: () => api.get<import('@/lib/types').Tag[]>('/tags'),
+
+  getCategoryModels: (slug: string, tagSlugs: string[] = []) =>
     api.get<{ category: import('@/lib/types').Category; models: import('@/lib/types').Model3D[] }>(
       `/categories/${slug}/models`,
+      { params: tagSlugs.length ? { tags: tagSlugs.join(',') } : undefined },
     ),
 
   downloadModel: (modelId: number) =>
     api.post<{ download_url: string }>(`/models/${modelId}/download`),
+}
+
+export const waitlistApi = {
+  join: (data: { email: string; name?: string }) =>
+    api.post<{ message: string; already_joined?: boolean }>('/waitlist', data),
+}
+
+export const favoritesApi = {
+  toggle: (modelId: number) =>
+    api.post<{ favorited: boolean; likes_count: number }>(`/models/${modelId}/favorite`),
+
+  list: () => api.get<import('@/lib/types').Model3D[]>('/models/favorites'),
 }
 
 export const subscriptionApi = {
