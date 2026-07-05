@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import axios from 'axios'
 import { libraryApi } from '@/lib/api'
-import type { Category, Model3D, Tag } from '@/lib/types'
+import type { Category, GroupedTags, Model3D } from '@/lib/types'
 import { ModelCard } from '@/components/ModelCard'
 import { TagFilter } from '@/components/TagFilter'
 
@@ -18,7 +18,7 @@ function CategoryModelsContent({
 }: {
   categorySlug: string
   activeTags: string[]
-  tags: Tag[]
+  tags: GroupedTags
   onToggleTag: (slug: string) => void
   onClearTags: () => void
 }) {
@@ -89,7 +89,7 @@ function CategoryModelsContent({
       </p>
 
       <TagFilter
-        tags={tags}
+        groupedTags={tags}
         activeSlugs={activeTags}
         onToggle={onToggleTag}
         onClear={onClearTags}
@@ -114,7 +114,7 @@ function CategoryModelsContent({
 
 export default function CategoryModelsPage() {
   const { categorySlug } = useParams<{ categorySlug: string }>()
-  const [tags, setTags] = useState<Tag[]>([])
+  const [tags, setTags] = useState<GroupedTags>({})
   const [activeTags, setActiveTags] = useState<string[]>([])
 
   useEffect(() => {

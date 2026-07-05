@@ -53,7 +53,7 @@ export const libraryApi = {
 
   getPlans: () => api.get<import('@/lib/types').Plan[]>('/plans'),
 
-  getTags: () => api.get<import('@/lib/types').Tag[]>('/tags'),
+  getTags: () => api.get<import('@/lib/types').GroupedTags>('/tags'),
 
   getCategoryModels: (slug: string, tagSlugs: string[] = []) =>
     api.get<{ category: import('@/lib/types').Category; models: import('@/lib/types').Model3D[] }>(
@@ -89,4 +89,42 @@ export const packApi = {
 
   purchase: (categoryId: number, data: { payer_name: string; payment_ref: string }) =>
     api.post(`/packs/${categoryId}`, data),
+}
+
+export const creatorApi = {
+  apply: (data: { bio: string; portfolio_url?: string; paypal_email: string }) =>
+    api.post('/creator/apply', data),
+
+  appStatus: () => api.get<import('@/lib/types').CreatorApplication | null>('/creator/apply/status'),
+
+  getModels: () => api.get<import('@/lib/types').Model3D[]>('/creator/models'),
+
+  presign: (params: {
+    file_name: string
+    file_type: string
+    thumbnail_name: string
+    thumbnail_type: string
+    category_slug: string
+  }) => api.get<import('@/lib/types').CreatorPresignResponse>('/creator/upload/presign', { params }),
+
+  autotag: (data: { thumbnail_key?: string; thumbnail_url?: string }) =>
+    api.post<import('@/lib/types').CreatorAutotagResponse>('/creator/upload/autotag', data),
+
+  confirmUpload: (data: {
+    category_id: number
+    name: string
+    file_key: string
+    thumbnail_key: string
+    file_size_bytes: number
+    sketchup_version_min: number
+    tag_ids: number[]
+  }) => api.post('/creator/models', data),
+
+  getEarnings: () => api.get<import('@/lib/types').CreatorEarnings>('/creator/earnings'),
+
+  updateProfile: (data: {
+    display_name?: string
+    bio?: string
+    paypal_email?: string
+  }) => api.put<import('@/lib/types').User>('/creator/profile', data),
 }

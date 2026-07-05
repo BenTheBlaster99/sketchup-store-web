@@ -1,0 +1,15 @@
+{
+  "scrollTrigger": {
+    "end": "+=5400",
+    "scrub": 1.2
+  },
+  "progressAnimation": {
+    "duration": 5.4,
+    "ease": "none"
+  },
+  "contentReveal": {
+    "duration": 1.2,
+    "delayOffset": "-=0.9",
+    "stagger": 0.2
+  }
+}

@@ -71,6 +71,11 @@ export function ModelCard({ model }: ModelCardProps) {
 
       <div className="p-3">
         <p className="text-sm font-medium text-zinc-900 truncate">{model.name}</p>
+        {model.creator && (
+          <p className="text-xs text-zinc-400 mt-0.5">
+            by {model.creator.display_name ?? model.creator.name}
+          </p>
+        )}
         <p className="text-xs text-zinc-500 mt-0.5">
           SketchUp {model.sketchup_version_min}+ · {formatFileSize(model.file_size_bytes)}
         </p>

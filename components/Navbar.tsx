@@ -37,6 +37,15 @@ export function Navbar() {
               >
                 Plugin
               </Link>
+              {user.creator_status === 'approved' ? (
+                <Link href="/creator" className="text-zinc-700 hover:text-zinc-900">
+                  Creator
+                </Link>
+              ) : user.creator_status !== 'pending' ? (
+                <Link href="/creator/apply" className="text-zinc-700 hover:text-zinc-900">
+                  Sell models
+                </Link>
+              ) : null}
               <span className="hidden sm:inline text-zinc-500">{user.name}</span>
               <button
                 type="button"
